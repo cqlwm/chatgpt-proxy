@@ -1,6 +1,9 @@
 # ChatGPT-Proxy-V4
 Cloudflare Bypass for OpenAI based on `puid`
 
+fork project:
+https://github.com/acheong08/ChatGPT-Proxy-V4
+
 ## Requirements
 
 - ChatGPT plus account 
