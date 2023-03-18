@@ -84,10 +84,6 @@ func main() {
 		}()
 	}
 
-	PORT := os.Getenv("PORT")
-	if PORT == "" {
-		PORT = "8080"
-	}
 	handler := gin.Default()
 	handler.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{"message": "pong"})
@@ -95,7 +91,7 @@ func main() {
 
 	handler.Any("/api/*path", proxy)
 
-	endless.ListenAndServe(os.Getenv("HOST")+":"+PORT, handler)
+	endless.ListenAndServe(":80", handler)
 }
 
 func proxy(c *gin.Context) {

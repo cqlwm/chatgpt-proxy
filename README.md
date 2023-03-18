@@ -20,3 +20,8 @@ Choose one or both.
 
 ### Running
 `ChatGPT-Proxy-V4`
+
+## start
+docker build -t chatgpt-proxy-v4:0.0.1 .
+
+docker run --name chatgpt-proxy-v4-c -p 8789:80 -d chatgpt-proxy-v4:0.0.1
