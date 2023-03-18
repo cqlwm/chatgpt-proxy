@@ -22,6 +22,8 @@ Choose one or both.
 `ChatGPT-Proxy-V4`
 
 ## start
+```shell
 docker build -t chatgpt-proxy-v4:0.0.1 .
 
-docker run --name chatgpt-proxy-v4-c -p 8789:80 -d chatgpt-proxy-v4:0.0.1
+docker run --name chatgpt-proxy-v4-c -e ACCESS_TOKEN="abc" -e PUID="def"  -p 8789:80 -d chatgpt-proxy-v4:0.0.1
+```

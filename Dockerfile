@@ -10,7 +10,7 @@ COPY . .
 
 RUN GOOS=linux GOARCH=amd64 go build -o app .
 
-RUN mkdir build && cp app build && cp start.sh build
+RUN mkdir build && cp app build
 
 FROM alpine
 
