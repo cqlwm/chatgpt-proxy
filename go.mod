@@ -1,6 +1,6 @@
-module github.com/acheong08/ChatGPT-Proxy-V4
+module github.com/cqlwm/chatgpt-proxy
 
-go 1.18
+go 1.20
 
 require (
 	github.com/bogdanfinn/fhttp v0.5.18
