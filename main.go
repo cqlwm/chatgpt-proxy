@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"log"
 	"os"
 	"time"
 
@@ -20,69 +21,53 @@ var (
 		tls_client.WithNotFollowRedirects(),
 		tls_client.WithCookieJar(jar), // create cookieJar instance and pass it as argument
 	}
-	client, _    = tls_client.NewHttpClient(tls_client.NewNoopLogger(), options...)
-	access_token = os.Getenv("ACCESS_TOKEN")
-	puid         = os.Getenv("PUID")
+	client, _   = tls_client.NewHttpClient(tls_client.NewNoopLogger(), options...)
+	accessToken = os.Getenv("ACCESS_TOKEN")
+	setCookie   = os.Getenv("SET_COOKIE")
 )
 
+func UniversalHeader(header *http.Header, cookie string) {
+	header.Set("authority", "chat.openai.com")
+	header.Set("accept", "*/*")
+	header.Set("accept-language", "zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6")
+	header.Set("Authorization", "Bearer "+accessToken)
+	header.Set("content-type", "application/json")
+	header.Set("cookie", cookie)
+	header.Set("referer", "https://chat.openai.com/chat?model=text-davinci-002-render-sha")
+	header.Set("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/111.0.0.0 Safari/537.36 Edg/111.0.1661.44")
+}
+
 func main() {
-	if access_token == "" && puid == "" {
-		println("Error: ACCESS_TOKEN and PUID are not set")
-		return
+	if accessToken == "" || setCookie == "" {
+		panic("Error: ACCESS_TOKEN and PUID are not set")
 	}
-	// Automatically refresh the puid cookie
-	if access_token != "" {
-		go func() {
-			url := "https://chat.openai.com/backend-api/models"
-			req, _ := http.NewRequest(http.MethodGet, url, nil)
-			req.Header.Set("Host", "chat.openai.com")
-			req.Header.Set("origin", "https://chat.openai.com/chat")
-			req.Header.Set("referer", "https://chat.openai.com/chat")
-			req.Header.Set("sec-ch-ua", `Chromium";v="110", "Not A(Brand";v="24", "Brave";v="110`)
-			req.Header.Set("sec-ch-ua-platform", "Linux")
-			req.Header.Set("content-type", "application/json")
-			req.Header.Set("content-type", "application/json")
-			req.Header.Set("accept", "text/event-stream")
-			req.Header.Set("user-agent", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36")
-			// Set authorization header
-			req.Header.Set("Authorization", "Bearer "+access_token)
-			// Initial puid cookie
-			req.AddCookie(
-				&http.Cookie{
-					Name:  "_puid",
-					Value: puid,
-				},
-			)
-			for {
-				resp, err := client.Do(req)
-				if err != nil {
-					break
-				}
-				defer resp.Body.Close()
-				println("Got response: " + resp.Status)
-				if resp.StatusCode != 200 {
-					println("Error: " + resp.Status)
-					// Print response body
-					body, _ := io.ReadAll(resp.Body)
-					println(string(body))
-					break
-				}
-				// Get cookies from response
-				cookies := resp.Cookies()
-				// Find _puid cookie
-				for _, cookie := range cookies {
-					if cookie.Name == "_puid" {
-						puid = cookie.Value
-						println("puid: " + puid)
-						break
-					}
-				}
-				// Sleep for 6 hour
-				time.Sleep(6 * time.Hour)
+	go func() {
+		url := "https://chat.openai.com/backend-api/models"
+		req, _ := http.NewRequest(http.MethodGet, url, nil)
+		UniversalHeader(&req.Header, setCookie)
+
+		for {
+			resp, err := client.Do(req)
+			if err != nil {
+				break
 			}
-			println("Error: Failed to refresh puid cookie")
-		}()
-	}
+
+			log.Println("Got response: " + resp.Status)
+			if resp.StatusCode != 200 {
+				body, _ := io.ReadAll(resp.Body)
+				log.Println(string(body))
+				break
+			}
+			_ = resp.Body.Close()
+
+			setCookie = resp.Header.Get("Set-Cookie")
+			log.Println("New cookie: " + setCookie)
+
+			// Sleep for 6 hour
+			time.Sleep(6 * time.Hour)
+		}
+		panic("Error: Failed to refresh puid cookie")
+	}()
 
 	handler := gin.Default()
 	handler.GET("/ping", func(c *gin.Context) {
@@ -91,60 +76,56 @@ func main() {
 
 	handler.Any("/api/*path", proxy)
 
-	endless.ListenAndServe(":80", handler)
+	err := endless.ListenAndServe(":80", handler)
+	if err != nil {
+		panic(err.Error())
+	}
 }
 
 func proxy(c *gin.Context) {
 
 	var url string
 	var err error
-	var request_method string
+	var requestMethod string
 	var request *http.Request
 	var response *http.Response
 
 	url = "https://chat.openai.com/backend-api" + c.Param("path")
-	request_method = c.Request.Method
+	requestMethod = c.Request.Method
 
-	request, err = http.NewRequest(request_method, url, c.Request.Body)
+	request, err = http.NewRequest(requestMethod, url, c.Request.Body)
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	request.Header.Set("Host", "chat.openai.com")
-	request.Header.Set("Origin", "https://chat.openai.com/chat")
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Connection", "keep-alive")
-	request.Header.Set("Keep-Alive", "timeout=360")
-	request.Header.Set("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/87.0.4280.88 Safari/537.36")
-	request.Header.Set("Authorization", c.Request.Header.Get("Authorization"))
-	if c.Request.Header.Get("Puid") == "" {
-		request.AddCookie(
-			&http.Cookie{
-				Name:  "_puid",
-				Value: puid,
-			},
-		)
-	} else {
-		request.AddCookie(
-			&http.Cookie{
-				Name:  "_puid",
-				Value: c.Request.Header.Get("Puid"),
-			},
-		)
+
+	requestToken := c.Request.Header.Get("Authorization")
+	requestCookie := c.Request.Header.Get("Cookie")
+	if requestCookie == "" && requestToken == "" {
+		requestToken = accessToken
+		requestCookie = setCookie
 	}
+	request.Header.Set("Authorization", requestToken)
+	request.Header.Set("Cookie", requestCookie)
 
 	response, err = client.Do(request)
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(response.Body)
+
 	if err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
-	defer response.Body.Close()
+
 	c.Header("Content-Type", response.Header.Get("Content-Type"))
-	// Get status code
 	c.Status(response.StatusCode)
 	c.Stream(func(w io.Writer) bool {
-		// Write data to client
-		io.Copy(w, response.Body)
+		_, err := io.Copy(w, response.Body)
+		if err != nil {
+			log.Println(err.Error())
+			return false
+		}
 		return false
 	})
 
