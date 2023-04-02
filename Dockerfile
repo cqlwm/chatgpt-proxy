@@ -19,7 +19,9 @@ WORKDIR /app
 COPY --from=builder /app/build .
 
 ENV GIN_MODE=release \
-    PORT=80
+    PORT=80 \
+    PROXY_HOST=http://host.docker.internal:8089
+#    http://43.134.168.122:8089
 
 EXPOSE 80
 
